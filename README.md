@@ -30,7 +30,7 @@ Run:
 
 ## (Optional) Creating/Running the model in python
 
-Install the python torch library, e.g. with conda
+Install the python torch library, e.g. with conda/mamba
 
     conda create -n torch pytorch=2.1.2 cpuonly numpy
 
@@ -47,3 +47,11 @@ Or recreate the pytorch model and trace it
 - Use cmake, torch provides CMAKE recipes
 - Generate the dummy data in Java and pass it to the C function
 - Link against libraries in the torch environment instead of additionally downloading `libtorch`
+
+## Notes
+
+Tested with:
+
+- openjdk 17.0.9 2023-10-17
+- g++ (GCC) 13.2.1 20230801
+- torchscript 2.1.2 cpu version

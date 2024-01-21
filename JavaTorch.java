@@ -7,7 +7,7 @@ class JavaTorch {
 
   public static void main(String [] args) {
     if (args.length != 1){
-      throw new IllegalArgumentException("Given path to model");
+      throw new IllegalArgumentException("Give path to model");
     }
     int inferred_class = new JavaTorch().inference(args[0]);
     System.out.println(inferred_class);
