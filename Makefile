@@ -20,9 +20,9 @@ JavaTorch.class: JavaTorch.java
 	${JAVA_PATH}/bin/javac $<
 
 test_dummy: libJavaTorch.so 
-	python model.py --mode create --model_path traced_dummy.pt
-	python model.py --mode run --model_path traced_dummy.pt
-	LD_LIBRARY_PATH=${LIBTORCH_PATH}/lib java -Djava.library.path=./ JavaTorch traced_dummy.pt
+	python model.py --mode create --model_path models/traced_dummy.pt
+	python model.py --mode run --model_path models/traced_dummy.pt
+	LD_LIBRARY_PATH=${LIBTORCH_PATH}/lib java -Djava.library.path=./ JavaTorch models/traced_dummy.pt
 
 clean:
 	rm libJavaTorch.so JavaTorch.o JavaTorch.h JavaTorch.class
