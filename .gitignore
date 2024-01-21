@@ -1,0 +1,9 @@
+/libtorch
+*.zip
+*.so
+*.o
+*.class
+
+__pycache__/
+*.py[cod]
+*$py.class
