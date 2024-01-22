@@ -44,8 +44,10 @@ Or recreate the pytorch model and trace it
 
 ## TODO/Improvements
 
-- Use cmake, torch provides CMAKE recipes
-- Generate the dummy data in Java and pass it to the C function
+- Use cmake instead of custom Makefile, torch provides CMAKE recipes. [JNI is also supported by cmake](https://cmake.org/cmake/help/latest/module/FindJNI.html)
+- Generate the dummy data in Java and pass it to the C function. Also, pass the logits to Java instead of only the class
+- Trace the preprocessing routines 
+- Load the model once instead of every time inference is performed. Profile inference.
 - Link against libraries in the torch environment instead of additionally downloading `libtorch`
 
 ## Notes
@@ -55,3 +57,5 @@ Tested with:
 - openjdk 17.0.9 2023-10-17
 - g++ (GCC) 13.2.1 20230801
 - torchscript 2.1.2 cpu version
+
+
