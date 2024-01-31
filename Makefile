@@ -1,4 +1,4 @@
-JAVA_PATH = /usr/lib/jvm/java-17-openjdk
+JAVA_PATH = ${JAVA_HOME}
 CXX = g++
 #LIBTORCH_PATH := $(shell python -c 'import torch;print(torch.__path__[0])')
 # ASSUMES THAT libtorch was downloaded in this folder:

@@ -54,7 +54,7 @@ Or recreate the pytorch model and trace it
 
 Tested with:
 
-- openjdk 17.0.9 2023-10-17
+- openjdk 21.0.2 2024-01-16
 - g++ (GCC) 13.2.1 20230801
 - torchscript 2.1.2 cpu version
 
