@@ -2,7 +2,7 @@ JAVA_PATH = ${JAVA_HOME}
 CXX = g++
 #LIBTORCH_PATH := $(shell python -c 'import torch;print(torch.__path__[0])')
 # ASSUMES THAT libtorch was downloaded in this folder:
-LIBTORCH_PATH = ./libtorch
+LIBTORCH_PATH = ../libtorch
 
 all : libJavaTorch.so JavaTorch.class
 

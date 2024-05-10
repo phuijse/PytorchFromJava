@@ -6,18 +6,18 @@
 
 using namespace std;
 
-torch::List<torch::Tensor> create_dummy_data(int M)
+std::tuple<torch::Tensor, torch::Tensor> create_dummy_data(int M)
 {
-  torch::List<torch::Tensor> light_curve;
-  light_curve.push_back(torch::ones({1, 1, M})); //TIME
-  light_curve.push_back(torch::ones({1, 1, M})); //FLUX
-  light_curve.push_back(torch::ones({1, 1, M})); //ERROR 
-  light_curve.push_back(torch::ones({1, 1, M}).to(torch::kBool)); //MASK
-  return light_curve;
+  torch::Tensor time = torch::linspace(0, 1000, M);
+  torch::Tensor flux = torch::sin(2.0*M_PI*time);
+  torch::Tensor ferr = torch::ones({M})*0.1;
+  torch::Tensor data = torch::stack({time,flux,ferr}, 0).reshape({1, 3, M});
+  torch::Tensor mask = torch::ones({1, M}).to(torch::kBool);
+  return std::tuple<torch::Tensor, torch::Tensor>{data, mask};
 }
 
 
-JNIEXPORT jint JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj, jstring path){
+JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj, jstring path){
 
   // Load model
   jboolean isCopy;
@@ -26,12 +26,21 @@ JNIEXPORT jint JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj, jstrin
   module = torch::jit::load(model_path);
   // Create dummy data 
   std::vector<torch::jit::IValue> inputs;
-  auto batch = torch::Dict<std::string, torch::List<torch::Tensor>>();
-  batch.insert("light_curve", create_dummy_data(100));
+  auto batch = torch::Dict<std::string, torch::Dict<std::string, 
+       std::tuple<torch::Tensor, torch::Tensor>>>();
+  auto band = torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>();
+  band.insert("g", create_dummy_data(100));
+  band.insert("bp", create_dummy_data(100));
+  band.insert("rp", create_dummy_data(100));
+  batch.insert("light_curve", band);
   inputs.push_back(batch);
   //Perform inference
   auto output = module.forward(inputs).toGenericDict();
-  std::cout <<  output.at("logits") << '\n';
-  return output.at("class").toTensor().item().toInt(); 
+  jfloatArray embedding;
+  embedding = (env)->NewFloatArray(32);
+  float *emb = output.at("embedding").toTensor().data_ptr<float>();
+  env->SetFloatArrayRegion(embedding, 0, 32, emb);
+  return embedding;
+  
 }
 

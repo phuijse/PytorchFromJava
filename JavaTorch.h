@@ -10,9 +10,9 @@ extern "C" {
 /*
  * Class:     JavaTorch
  * Method:    inference
- * Signature: (Ljava/lang/String;)I
+ * Signature: (Ljava/lang/String;)[F
  */
-JNIEXPORT jint JNICALL Java_JavaTorch_inference
+JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference
   (JNIEnv *, jobject, jstring);
 
 #ifdef __cplusplus
