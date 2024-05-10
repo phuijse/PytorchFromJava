@@ -34,12 +34,13 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   band.insert("rp", create_dummy_data(100));
   batch.insert("light_curve", band);
   inputs.push_back(batch);
-  //Perform inference
+  // Perform inference
   auto output = module.forward(inputs).toGenericDict();
-  jfloatArray embedding;
-  embedding = (env)->NewFloatArray(32);
-  float *emb = output.at("embedding").toTensor().data_ptr<float>();
-  env->SetFloatArrayRegion(embedding, 0, 32, emb);
+  // Return embedding
+  auto emb = output.at("embedding").toTensor();
+  int latent_dim = emb.sizes()[1];
+  jfloatArray embedding = (env)->NewFloatArray(latent_dim);
+  env->SetFloatArrayRegion(embedding, 0, latent_dim, emb.data_ptr<float>());
   return embedding;
   
 }
