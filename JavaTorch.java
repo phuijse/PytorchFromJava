@@ -20,15 +20,14 @@ class DummyLightCurve
 }
 
 class JavaTorch {
-  private native float[] inference(String model_path,
-      double[] time, double [] mag, double [] err);
+  private native float[] inference(String model_path, DummyLightCurve lc);
 
   public static void main(String [] args) {
     if (args.length != 1){
       throw new IllegalArgumentException("Give path to model");
     }
-    DummyLightCurve dummy = new DummyLightCurve(100);
-    float embedding[] = new JavaTorch().inference(args[0], dummy.time, dummy.mag, dummy.err);
+    DummyLightCurve lc = new DummyLightCurve(100);
+    float embedding[] = new JavaTorch().inference(args[0], lc);
     System.out.println(Arrays.toString(embedding));
 
   }

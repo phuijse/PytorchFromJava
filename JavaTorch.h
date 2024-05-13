@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     JavaTorch
  * Method:    inference
- * Signature: (Ljava/lang/String;[D[D[D)[F
+ * Signature: (Ljava/lang/String;LDummyLightCurve;)[F
  */
 JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference
-  (JNIEnv *, jobject, jstring, jdoubleArray, jdoubleArray, jdoubleArray);
+  (JNIEnv *, jobject, jstring, jobject);
 
 #ifdef __cplusplus
 }
