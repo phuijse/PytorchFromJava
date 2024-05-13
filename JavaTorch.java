@@ -1,20 +1,39 @@
-//import org.pytorch.IValue;
 import java.util.Arrays;
 
+class DummyLightCurve
+{
+  public double[] time;
+  public double[] mag;
+  public double[] err;
+
+  public DummyLightCurve(int N){
+    time = new double[N];
+    mag = new double[N];
+    err = new double[N];
+    for (int i=0; i<N; i++)
+    {
+      time[i] = 1000.0*((double)i/((double)N-1));
+      mag[i] = Math.sin(2.0*Math.PI*time[i]);
+      err[i] = 0.1;
+    }
+  }
+}
 
 class JavaTorch {
-  static {
-    System.loadLibrary("JavaTorch");
-  }
-
-  private native float[] inference(String model_path);
+  private native float[] inference(String model_path,
+      double[] time, double [] mag, double [] err);
 
   public static void main(String [] args) {
     if (args.length != 1){
       throw new IllegalArgumentException("Give path to model");
     }
-    float embedding[] = new JavaTorch().inference(args[0]);
+    DummyLightCurve dummy = new DummyLightCurve(100);
+    float embedding[] = new JavaTorch().inference(args[0], dummy.time, dummy.mag, dummy.err);
     System.out.println(Arrays.toString(embedding));
 
   }
+  static {
+    System.loadLibrary("JavaTorch");
+  }
 }
+
