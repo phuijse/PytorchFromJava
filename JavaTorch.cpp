@@ -15,8 +15,8 @@ ArrayToTensor(double *jtime, double *jmag, double *jerr, int N) {
   auto time = torch::from_blob(jtime, {N}, options).to(torch::kFloat32);
   auto mag = torch::from_blob(jmag, {N}, options).to(torch::kFloat32);
   auto err = torch::from_blob(jerr, {N}, options).to(torch::kFloat32);
-  torch::Tensor data = torch::stack({time, mag, err}, 0).reshape({1, 3, N});
-  torch::Tensor mask = torch::ones({1, N}).to(torch::kBool);
+  torch::Tensor data = torch::stack({time, mag, err}, 0).reshape({1, 3, N}).to(torch::kCUDA);
+  torch::Tensor mask = torch::ones({1, N}).to(torch::kBool).to(torch::kCUDA);
   return std::tuple<torch::Tensor, torch::Tensor>{data, mask};
 }
 
@@ -92,7 +92,7 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
     std::cerr << " Could not load model at: " << model_path << "\n";
     return NULL;
   }
-  module.to(torch::kCPU);
+  module.to(torch::kCUDA);
   module.eval();
   // torch::set_num_interop_threads(1);
 
@@ -116,7 +116,7 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
             << " ms\n";
 #endif
   // Return embedding
-  auto emb = output.at("embedding").toTensor().detach();
+  auto emb = output.at("embedding").toTensor().detach().to(torch::kCPU);
   int latent_dim = emb.sizes()[1];
   jfloatArray embedding = (env)->NewFloatArray(latent_dim);
   env->SetFloatArrayRegion(embedding, 0, latent_dim, emb.data_ptr<float>());
