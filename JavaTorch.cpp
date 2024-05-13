@@ -10,13 +10,17 @@
 using namespace std;
 
 std::tuple<torch::Tensor, torch::Tensor>
-ArrayToTensor(double *jtime, double *jmag, double *jerr, int N) {
+ArrayToTensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu) {
   auto options = torch::TensorOptions().dtype(torch::kFloat64);
   auto time = torch::from_blob(jtime, {N}, options).to(torch::kFloat32);
   auto mag = torch::from_blob(jmag, {N}, options).to(torch::kFloat32);
   auto err = torch::from_blob(jerr, {N}, options).to(torch::kFloat32);
-  torch::Tensor data = torch::stack({time, mag, err}, 0).reshape({1, 3, N}).to(torch::kCUDA);
-  torch::Tensor mask = torch::ones({1, N}).to(torch::kBool).to(torch::kCUDA);
+  torch::Tensor data = torch::stack({time, mag, err}, 0).reshape({1, 3, N});
+  torch::Tensor mask = torch::ones({1, N}).to(torch::kBool);
+  if (use_gpu) {
+    data = data.to(torch::kCUDA);
+    mask = mask.to(torch::kCUDA);
+  }
   return std::tuple<torch::Tensor, torch::Tensor>{data, mask};
 }
 
@@ -28,8 +32,10 @@ ArrayToTensor(double *jtime, double *jmag, double *jerr, int N) {
 // }
 
 JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
-                                                       jstring path,
-                                                       jobject lc) {
+                                                       jstring path, jobject lc,
+                                                       jboolean use_gpu) {
+  c10::InferenceMode guard(true);
+
 // Read data
 #ifdef DEBUG
   using milli = std::chrono::milliseconds;
@@ -59,7 +65,7 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   if (time == NULL || mag == NULL || err == NULL) {
     return NULL;
   }
-  auto data = ArrayToTensor(time, mag, err, N);
+  auto data = ArrayToTensor(time, mag, err, N, use_gpu);
   auto batch = torch::Dict<
       std::string,
       torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>>();
@@ -84,7 +90,6 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   if (model_path == NULL) {
     return NULL;
   }
-  torch::NoGradGuard no_grad;
   static torch::jit::script::Module module;
   try {
     module = torch::jit::load(model_path);
@@ -92,7 +97,9 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
     std::cerr << " Could not load model at: " << model_path << "\n";
     return NULL;
   }
-  module.to(torch::kCUDA);
+  if (use_gpu == JNI_TRUE) {
+    module.to(torch::kCUDA);
+  }
   module.eval();
   // torch::set_num_interop_threads(1);
 
