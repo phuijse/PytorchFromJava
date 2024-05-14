@@ -10,7 +10,7 @@
 using namespace std;
 
 std::tuple<torch::Tensor, torch::Tensor>
-ArrayToTensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu) {
+to_tensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu) {
   auto options = torch::TensorOptions().dtype(torch::kFloat64);
   auto time = torch::from_blob(jtime, {N}, options).to(torch::kFloat32);
   auto mag = torch::from_blob(jmag, {N}, options).to(torch::kFloat32);
@@ -22,6 +22,23 @@ ArrayToTensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu) {
     mask = mask.to(torch::kCUDA);
   }
   return std::tuple<torch::Tensor, torch::Tensor>{data, mask};
+}
+
+std::vector<torch::jit::IValue> form_input(double *jtime, double *jmag,
+                                           double *jerr, int N, bool use_gpu) {
+  auto data = to_tensor(jtime, jmag, jerr, N, use_gpu);
+  auto batch = torch::Dict<
+      std::string,
+      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>>();
+  auto band =
+      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>();
+  band.insert("g", data);
+  band.insert("bp", data);
+  band.insert("rp", data);
+  batch.insert("light_curve", band);
+  std::vector<torch::jit::IValue> inputs;
+  inputs.push_back(batch);
+  return inputs;
 }
 
 // jdoubleArray *read_field(JNIEnv *env, jclass cls) {
@@ -45,7 +62,6 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   jboolean isCopy;
   jfieldID id;
   jdouble *time, *mag, *err;
-  // jtime = env->GetDoubleArrayElements(time, &isCopy);
   jclass jcClass = env->GetObjectClass(lc);
   id = env->GetFieldID(jcClass, "time", "[D");
   jobject timedata = env->GetObjectField(lc, id);
@@ -65,22 +81,20 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   if (time == NULL || mag == NULL || err == NULL) {
     return NULL;
   }
-  auto data = ArrayToTensor(time, mag, err, N, use_gpu);
-  auto batch = torch::Dict<
-      std::string,
-      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>>();
-  auto band =
-      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>();
-  band.insert("g", data);
-  band.insert("bp", data);
-  band.insert("rp", data);
-  batch.insert("light_curve", band);
-  std::vector<torch::jit::IValue> inputs;
-  inputs.push_back(batch);
-
 #ifdef DEBUG
   auto finish = std::chrono::high_resolution_clock::now();
-  std::cout << "Transforming data to tensor took: "
+  std::cout << "Reading data from Java class fields: "
+            << std::chrono::duration_cast<milli>(finish - start).count()
+            << " ms\n";
+  start = std::chrono::high_resolution_clock::now();
+#endif
+
+  std::vector<torch::jit::IValue> inputs =
+      form_input(time, mag, err, N, use_gpu);
+
+#ifdef DEBUG
+  finish = std::chrono::high_resolution_clock::now();
+  std::cout << "Transforming to tensor and moving to device: "
             << std::chrono::duration_cast<milli>(finish - start).count()
             << " ms\n";
   start = std::chrono::high_resolution_clock::now();
@@ -113,17 +127,32 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
 
   // Perform inference
   auto output = module.forward(inputs).toGenericDict();
-// for (int i = 0; i < 2; i++) {
-//   module.forward(inputs).toGenericDict();
-// }
 #ifdef DEBUG
   finish = std::chrono::high_resolution_clock::now();
   std::cout << "Inference completed in: "
             << std::chrono::duration_cast<milli>(finish - start).count()
             << " ms\n";
 #endif
+
+#ifdef DEBUG
+  for (int i = 0; i < 10; i++) {
+
+    start = std::chrono::high_resolution_clock::now();
+    inputs = form_input(time, mag, err, N, use_gpu);
+    output = module.forward(inputs).toGenericDict();
+    // torch::cuda::synchronize();
+    finish = std::chrono::high_resolution_clock::now();
+    std::cout << "Transfer + inference " << i << ": "
+              << std::chrono::duration_cast<milli>(finish - start).count()
+              << " ms\n";
+  }
+
+#endif
+
   // Return embedding
-  auto emb = output.at("embedding").toTensor().detach().to(torch::kCPU);
+  auto emb = output.at("embedding").toTensor().detach();
+  if (use_gpu == JNI_TRUE)
+    emb = emb.to(torch::kCPU);
   int latent_dim = emb.sizes()[1];
   jfloatArray embedding = (env)->NewFloatArray(latent_dim);
   env->SetFloatArrayRegion(embedding, 0, latent_dim, emb.data_ptr<float>());
