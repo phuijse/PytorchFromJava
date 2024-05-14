@@ -8,10 +8,10 @@ all : libJavaTorch.so JavaTorch.class
 
 # $@ matches the target, $< matches the first dependancy
 libJavaTorch.so : JavaTorch.o
-	${CXX} -shared -fPIC -L${LIBTORCH_PATH}/lib -ltorch -o $@ $<
+	${CXX} -shared -fPIC -L${LIBTORCH_PATH}/lib -ltorch -ltorch_cpu -ltorch_cuda -lc10 -o $@ $<
 
 JavaTorch.o : JavaTorch.cpp JavaTorch.h
-	${CXX} -fPIC -I${JAVA_PATH}/include -I${JAVA_PATH}/include/linux -I${LIBTORCH_PATH}/include -c $< -o $@
+	${CXX} -fPIC -I${JAVA_PATH}/include -I${JAVA_PATH}/include/linux -I${LIBTORCH_PATH}/include -I${LIBTORCH_PATH}/include/torch/csrc/api/include -c $< -o $@
 
 JavaTorch.h: JavaTorch.java
 	${JAVA_PATH}/bin/javac -h . $<

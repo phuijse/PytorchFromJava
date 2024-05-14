@@ -3,6 +3,7 @@
 #include <iostream>
 #include <jni.h>
 #include <memory>
+#include <torch/cuda.h>
 #include <torch/script.h>
 
 #define DEBUG
@@ -126,7 +127,11 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
 #endif
 
   // Perform inference
-  auto output = module.forward(inputs).toGenericDict();
+  auto output =
+      module.forward(inputs).toGenericDict().at("embedding").toTensor();
+  if (use_gpu == JNI_TRUE) {
+    output = output.to(torch::kCPU);
+  }
 #ifdef DEBUG
   finish = std::chrono::high_resolution_clock::now();
   std::cout << "Inference completed in: "
@@ -139,8 +144,11 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
 
     start = std::chrono::high_resolution_clock::now();
     inputs = form_input(time, mag, err, N, use_gpu);
-    output = module.forward(inputs).toGenericDict();
-    // torch::cuda::synchronize();
+    output = module.forward(inputs).toGenericDict().at("embedding").toTensor();
+    if (use_gpu == JNI_TRUE) {
+      torch::cuda::synchronize();
+      output = output.to(torch::kCPU);
+    }
     finish = std::chrono::high_resolution_clock::now();
     std::cout << "Transfer + inference " << i << ": "
               << std::chrono::duration_cast<milli>(finish - start).count()
@@ -150,12 +158,9 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
 #endif
 
   // Return embedding
-  auto emb = output.at("embedding").toTensor().detach();
-  if (use_gpu == JNI_TRUE)
-    emb = emb.to(torch::kCPU);
-  int latent_dim = emb.sizes()[1];
+  int latent_dim = output.sizes()[1];
   jfloatArray embedding = (env)->NewFloatArray(latent_dim);
-  env->SetFloatArrayRegion(embedding, 0, latent_dim, emb.data_ptr<float>());
+  env->SetFloatArrayRegion(embedding, 0, latent_dim, output.data_ptr<float>());
   // Clean up
   env->ReleaseDoubleArrayElements(jtime, time, 0);
   env->ReleaseDoubleArrayElements(jmag, mag, 0);
