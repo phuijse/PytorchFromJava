@@ -27,9 +27,14 @@ class JavaTorch {
           "Arg1 (str): path to model, Arg2 (bool) use_GPU");
     }
     DummyLightCurve lc = new DummyLightCurve(100);
+    JavaTorch processor = new JavaTorch();
     float embedding[] =
-        new JavaTorch().inference(args[0], lc, Boolean.parseBoolean(args[1]));
+        processor.inference(args[0], lc, Boolean.parseBoolean(args[1]));
     System.out.println(Arrays.toString(embedding));
+    for (int i=0;i<10;i++)
+    {
+    	processor.inference(args[0], lc, Boolean.parseBoolean(args[1]));
+    }
   }
   static { System.loadLibrary("JavaTorch"); }
 }

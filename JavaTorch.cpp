@@ -10,29 +10,33 @@
 
 using namespace std;
 
-std::tuple<torch::Tensor, torch::Tensor>
-to_tensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu) {
+std::tuple<at::Tensor, at::Tensor>
+to_tensor(double *jtime, double *jmag, double *jerr, int N, bool use_gpu, bool non_blocking, int batch_size) {
   auto options = torch::TensorOptions().dtype(torch::kFloat64);
-  auto time = torch::from_blob(jtime, {N}, options).to(torch::kFloat32);
-  auto mag = torch::from_blob(jmag, {N}, options).to(torch::kFloat32);
-  auto err = torch::from_blob(jerr, {N}, options).to(torch::kFloat32);
-  torch::Tensor data = torch::stack({time, mag, err}, 0).reshape({1, 3, N});
-  torch::Tensor mask = torch::ones({1, N}).to(torch::kBool);
-  if (use_gpu) {
-    data = data.to(torch::kCUDA);
-    mask = mask.to(torch::kCUDA);
+  auto time = at::from_blob(jtime, {N}, options).to(torch::kFloat32);
+  auto mag = at::from_blob(jmag, {N}, options).to(torch::kFloat32);
+  auto err = at::from_blob(jerr, {N}, options).to(torch::kFloat32);
+  at::Tensor data = at::stack({time, mag, err}, 0).reshape({1, 3, N});
+  at::Tensor mask = at::ones({1, N}).to(torch::kBool);
+  if (batch_size > 1){
+  	data = data.repeat({batch_size, 1, 1});
+  	mask = mask.repeat({batch_size, 1});
   }
-  return std::tuple<torch::Tensor, torch::Tensor>{data, mask};
+  if (use_gpu) {
+    data = data.to(torch::kCUDA, non_blocking);
+    mask = mask.to(torch::kCUDA, non_blocking);
+  }
+  return std::tuple<at::Tensor, at::Tensor>{data, mask};
 }
 
 std::vector<torch::jit::IValue> form_input(double *jtime, double *jmag,
-                                           double *jerr, int N, bool use_gpu) {
-  auto data = to_tensor(jtime, jmag, jerr, N, use_gpu);
+                                           double *jerr, int N, bool use_gpu, bool non_blocking, int batch_size) {
+  auto data = to_tensor(jtime, jmag, jerr, N, use_gpu, non_blocking, batch_size);
   auto batch = torch::Dict<
       std::string,
-      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>>();
+      torch::Dict<std::string, std::tuple<at::Tensor, at::Tensor>>>();
   auto band =
-      torch::Dict<std::string, std::tuple<torch::Tensor, torch::Tensor>>();
+      torch::Dict<std::string, std::tuple<at::Tensor, at::Tensor>>();
   band.insert("g", data);
   band.insert("bp", data);
   band.insert("rp", data);
@@ -40,6 +44,15 @@ std::vector<torch::jit::IValue> form_input(double *jtime, double *jmag,
   std::vector<torch::jit::IValue> inputs;
   inputs.push_back(batch);
   return inputs;
+}
+
+void benchmark(double *jtime, double *jmag, double *jerr, int N, bool use_gpu, bool non_blocking, torch::jit::script::Module module){
+    std::vector<torch::jit::IValue> inputs = form_input(jtime, jmag, jerr, N, use_gpu, non_blocking, 128);
+    torch::Tensor output = module.forward(inputs).toGenericDict().at("embedding").toTensor();
+    if (use_gpu == JNI_TRUE) {
+      output = output.to(torch::kCPU, non_blocking);
+    }
+    //std::cout << output << "\n";
 }
 
 // jdoubleArray *read_field(JNIEnv *env, jclass cls) {
@@ -89,9 +102,13 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
             << " ms\n";
   start = std::chrono::high_resolution_clock::now();
 #endif
+  if (use_gpu == JNI_TRUE)
+      torch::cuda::synchronize();
 
   std::vector<torch::jit::IValue> inputs =
-      form_input(time, mag, err, N, use_gpu);
+      form_input(time, mag, err, N, use_gpu, true, 256);
+  if (use_gpu == JNI_TRUE)
+      torch::cuda::synchronize();
 
 #ifdef DEBUG
   finish = std::chrono::high_resolution_clock::now();
@@ -125,12 +142,14 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
             << " ms\n";
   start = std::chrono::high_resolution_clock::now();
 #endif
-
+  if (use_gpu == JNI_TRUE)
+      torch::cuda::synchronize();
   // Perform inference
   auto output =
       module.forward(inputs).toGenericDict().at("embedding").toTensor();
   if (use_gpu == JNI_TRUE) {
-    output = output.to(torch::kCPU);
+    output = output.to(torch::kCPU, true);
+      torch::cuda::synchronize();
   }
 #ifdef DEBUG
   finish = std::chrono::high_resolution_clock::now();
@@ -138,16 +157,15 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
             << std::chrono::duration_cast<milli>(finish - start).count()
             << " ms\n";
 #endif
-
+/*
 #ifdef DEBUG
   for (int i = 0; i < 10; i++) {
-
+    if (use_gpu == JNI_TRUE)
+      torch::cuda::synchronize();
     start = std::chrono::high_resolution_clock::now();
-    inputs = form_input(time, mag, err, N, use_gpu);
-    output = module.forward(inputs).toGenericDict().at("embedding").toTensor();
+    benchmark(time, mag, err, N, use_gpu, false, module);
     if (use_gpu == JNI_TRUE) {
       torch::cuda::synchronize();
-      output = output.to(torch::kCPU);
     }
     finish = std::chrono::high_resolution_clock::now();
     std::cout << "Transfer + inference " << i << ": "
@@ -156,8 +174,9 @@ JNIEXPORT jfloatArray JNICALL Java_JavaTorch_inference(JNIEnv *env, jobject obj,
   }
 
 #endif
-
+*/
   // Return embedding
+  std::cout << output.sizes() << "\n";
   int latent_dim = output.sizes()[1];
   jfloatArray embedding = (env)->NewFloatArray(latent_dim);
   env->SetFloatArrayRegion(embedding, 0, latent_dim, output.data_ptr<float>());
